@@ -1,44 +1,39 @@
 pipeline {
-    agent {
-        // Необхідно для роботи в плейграунді
-        label 'agent-node-label'
-    }
+    agent any
 
     environment {
-        // Поміняйте APP_NAME та DOCKER_IMAGE_NAME на ваше імʼя та прізвище, відповідно.
-        APP_NAME = 'your_app_name'
-        DOCKER_IMAGE_NAME = 'your_docker_image_name'
-        // Необхідно для роботи в плейграунді
-        GOCACHE="/home/jenkins/.cache/go-build/"
+        // Інші змінні середовища...
+        APP_NAME = 'my-go-app'
+        DOCKER_IMAGE_NAME = 'my-go-app-image'
+        // ...
     }
 
     stages {
         stage('Clone Repository') {
             steps {
-                // Крок клонування репозиторію
-                // TODO: ваш код
+                checkout([$class: 'GitSCM', branches: [[name: '*/main']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[url: 'your_git_repository_url']]])
             }
         }
 
-        stage('Compile') {
-            agent {
-                // Використання Docker образу з підтримкою Go версії 1.21.3. Обовʼязково необхідно використати параметр `reuseNode true` для Docker агента для роботи в плейграунді
-                // TODO: ваш код
-            }
-            steps {
-                // Компіляція проекту на мові Go. Всі ці флаги необхідні для запуску на пустій файловій системі образу scratch :)
-                sh "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -ldflags '-w -s -extldflags \"-static\"' -o ${APP_NAME} ."
-            }
-        }
+        stage('Build and Test') {
+            parallel {
+                stage('Compile') {
+                    steps {
+                        script {
+                            // Компіляція проекту на мові Go
+                            sh "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -ldflags '-w -s -extldflags \"-static\"' -o ${APP_NAME} ."
+                        }
+                    }
+                }
 
-        stage('Unit Testing') {
-            agent {
-                // Використання Docker образу з підтримкою Go версії 1.21.3. Обовʼязково необхідно використати параметр `reuseNode true` для Docker агента для роботи в плейграунді
-                // TODO: ваш код
-            }
-            steps {
-                // Виконання юніт-тестів. Команду можна знайти в Google
-                // TODO: ваш код
+                stage('Unit Testing') {
+                    steps {
+                        script {
+                            // Виконання юніт-тестів
+                            sh "go test -v ./..."
+                        }
+                    }
+                }
             }
         }
 
@@ -46,15 +41,19 @@ pipeline {
             parallel {
                 stage('Archive Artifact') {
                     steps {
-                        // Створення TAR-архіву артефакту з використанням імені додатку APP_NAME та номеру сборки BUILD_NUMBER
-                        // TODO: ваш код
+                        script {
+                            // Створення TAR-архіву артефакту
+                            sh "tar -czvf ${APP_NAME}.tar.gz ${APP_NAME}"
+                        }
                     }
                 }
 
                 stage('Build Docker Image') {
                     steps {
-                        // Створення Docker образу з імʼям DOCKER_IMAGE_NAME і тегом BUILD_NUMBER та передача аргументу APP_NAME за допомогою флагу `--build-arg`
-                        // TODO: ваш код
+                        script {
+                            // Створення Docker образу
+                            sh "docker build -t ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER} --build-arg APP_NAME=${APP_NAME} ."
+                        }
                     }
                 }
             }
@@ -63,8 +62,10 @@ pipeline {
 
     post {
         success {
-            // Архівація успішна, артефакт готовий для використання та збереження
-            // TODO: ваш код
+            script {
+                // Додаткові дії у разі успішного виконання
+                echo 'Pipeline finished successfully'
+            }
         }
         always {
             // Завершення пайплайну, можна додати додаткові кроки (наприклад, розгортання) за потребою
